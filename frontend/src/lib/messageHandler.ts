@@ -15,7 +15,13 @@ export interface ProcessedMessage {
   text: string;
   isVerified: boolean;
   timestamp: string;
-  status: 'verified' | 'unverified' | 'corrupted'; // Status detail
+  status: 'verified' | 'unverified' | 'corrupted';
+  // For technical details modal
+  hash?: string;
+  signature?: { r: string; s: string };
+  encryptedMessage?: string;
+  // Error details for failed decryption
+  errorDetails?: string;
 }
 
 export const processIncomingMessage = async (
@@ -29,6 +35,7 @@ export const processIncomingMessage = async (
   let decryptedText = "";
   let isIntegrityValid = false;
   let isSignatureValid = false;
+  let computedHash = "";
 
   try {
     // 1. Dekripsi Pesan
@@ -56,7 +63,7 @@ export const processIncomingMessage = async (
     // Atau jika tim Anda sepakat hanya hash isi pesan mentah:
     // const computedHash = hashMessage(decryptedText); 
     
-    const computedHash = hashMessage(rawContentToHash);
+    computedHash = hashMessage(rawContentToHash);
 
     // Bandingkan Hash hitungan sendiri vs Hash yang dikirim
     if (computedHash === payload.message_hash) {
@@ -73,13 +80,38 @@ export const processIncomingMessage = async (
 
   } catch (error) {
     console.error("Gagal memproses pesan:", error);
+    
+    // Determine specific error type
+    let errorMessage = "[Decryption Failed / Corrupted]";
+    let errorDetails = "";
+    
+    if (error instanceof Error) {
+      if (error.message.includes("DECRYPTION_FAILED")) {
+        errorMessage = "❌ Decryption Failed";
+        errorDetails = "Message could not be decrypted. Possible reasons:\n• Public key does not match\n• Message has been altered or corrupted\n• Invalid encryption format";
+      } else if (error.message.includes("INVALID_FORMAT")) {
+        errorMessage = "❌ Invalid Format";
+        errorDetails = "Encrypted message format is invalid or corrupted.";
+      } else if (error.message.includes("Private key not found")) {
+        errorMessage = "❌ Authentication Error";
+        errorDetails = "Private key not found. Please login again.";
+      } else {
+        errorDetails = error.message;
+      }
+    }
+    
     return {
       id: crypto.randomUUID(),
       sender: payload.sender_username,
-      text: "[Pesan Gagal didekripsi / Rusak]",
+      text: errorMessage,
       timestamp: payload.timestamp,
       isVerified: false,
-      status: 'corrupted'
+      status: 'corrupted',
+      errorDetails: errorDetails,
+      // Include original payload for debugging
+      encryptedMessage: payload.encrypted_message,
+      hash: payload.message_hash,
+      signature: payload.signature
     };
   }
 
@@ -95,6 +127,10 @@ export const processIncomingMessage = async (
     text: decryptedText,
     timestamp: payload.timestamp,
     isVerified: finalStatus === 'verified',
-    status: finalStatus
+    status: finalStatus,
+    // Include technical details for modal
+    hash: computedHash,
+    signature: payload.signature,
+    encryptedMessage: payload.encrypted_message
   };
 };

@@ -12,6 +12,22 @@ export const getPrivateKey = (username: string): string | null => {
   return localStorage.getItem(`priv_${username}`);
 };
 
+// Token helpers (Auth Token disimpan agar request lain bisa memakai Authorization header)
+const TOKEN_KEY = 'auth_token';
+
+export const setAuthToken = (token: string | undefined | null) => {
+  if (!token) return;
+  localStorage.setItem(TOKEN_KEY, token);
+};
+
+export const getAuthToken = (): string | null => {
+  return localStorage.getItem(TOKEN_KEY);
+};
+
+export const clearAuthToken = () => {
+  localStorage.removeItem(TOKEN_KEY);
+};
+
 // --- 1. Registrasi dengan Password ---
 export const registerUser = async (username: string, password: string) => {
   // 1. Generate Kunci Deterministik dari Password (KDF)
@@ -30,10 +46,14 @@ export const registerUser = async (username: string, password: string) => {
 
   if (!response.ok) {
     const errorData = await response.json();
-    throw new Error(errorData.message || 'Registrasi gagal');
+    throw new Error(errorData.message || 'Registration failed');
   }
   
-  return await response.json();
+  const result = await response.json();
+  // Jika backend mengembalikan token setelah registrasi, simpan agar user langsung terotentikasi
+  const token = result?.data?.token || result?.token || result?.access_token;
+  if (token) setAuthToken(token);
+  return result;
 };
 
 // --- 2. Login dengan Password ---
@@ -54,7 +74,7 @@ export const loginUser = async (username: string, password: string) => {
   
   if (!challengeRes.ok) {
       const err = await challengeRes.json();
-      throw new Error(err.message || 'User tidak ditemukan / Gagal meminta challenge');
+      throw new Error(err.message || 'User not found / Failed to request challenge');
   }
   
   const { data: { nonce } } = await challengeRes.json();
@@ -75,9 +95,14 @@ export const loginUser = async (username: string, password: string) => {
 
   if (!verifyRes.ok) {
       const err = await verifyRes.json();
-      throw new Error(err.message || 'Login gagal / Password salah (Signature mismatch)');
+      throw new Error(err.message || 'Login failed / Incorrect password (Signature mismatch)');
   }
   
   const result = await verifyRes.json();
+
+  // Simpan token untuk dipakai di request lain
+  const token = result?.data?.token || result?.token || result?.access_token;
+  if (token) setAuthToken(token);
+
   return result.data; 
 };

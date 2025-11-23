@@ -3,6 +3,7 @@ import { MessageSquare, LogOut } from 'lucide-react';
 import AuthPage from '@/pages/AuthPage';
 import ChatPage from '@/pages/ChatPage';
 import ContactSidebar from '@/components/ContactSidebar'; // Pastikan komponen ini sudah dibuat
+import { clearAuthToken } from '@/services/authService';
 
 function App() {
   const [currentUser, setCurrentUser] = useState<string | null>(null);
@@ -37,6 +38,7 @@ function App() {
     setCurrentUser(null);
     setSelectedContact(null);
     localStorage.removeItem('last_user');
+    clearAuthToken();
   };
 
   if (isLoading) {
@@ -80,7 +82,7 @@ function App() {
             </div>
             <button 
             onClick={handleLogout}
-            className="bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white p-2.5 rounded-xl transition-all shadow-lg hover:shadow-xl transform hover:scale-105"
+            className="bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white p-2.5 rounded-xl transition-all shadow-lg hover:shadow-xl transform hover:scale-105 cursor-pointer"
             title="Logout"
             >
             <LogOut size={18} />
@@ -93,7 +95,8 @@ function App() {
         {/* Sidebar */}
         <ContactSidebar 
           selectedContact={selectedContact} 
-          onSelectContact={setSelectedContact} 
+          onSelectContact={setSelectedContact}
+          currentUser={currentUser}
         />
 
         {/* Chat Area */}
