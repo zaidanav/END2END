@@ -1,6 +1,5 @@
-import { getAuthToken } from '@/services/authService';
-
-const API_URL = '/api/users';
+const BASE_URL = import.meta.env.VITE_API_URL || "/api";
+const API_URL = `${BASE_URL}/users`;
 
 export interface UserProfile {
   username: string;
@@ -8,58 +7,30 @@ export interface UserProfile {
 }
 
 /**
- * Get user profile (including public key) by username
+ * Get user profile by username
  */
-export const getContactProfile = async (username: string): Promise<UserProfile | null> => {
+export const getContactProfile = async (
+  username: string
+): Promise<UserProfile | null> => {
   try {
-    const token = getAuthToken();
-
+    const token = localStorage.getItem("token");
     const res = await fetch(`${API_URL}/${username}`, {
-      method: 'GET',
+      method: "GET",
       headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
       },
     });
 
     if (!res.ok) {
-      if (res.status === 404) {
-        return null; // User not found
-      }
-      // If endpoint doesn't exist (backend not ready), use fallback
-      if (res.status === 404 || res.status === 500) {
-        console.warn("Backend endpoint not available, using fallback mock data");
-        return new Promise((resolve) => {
-          setTimeout(() => {
-            resolve({
-              username: username,
-              // Public key dummy (ganti dengan hex valid untuk tes dekripsi nyata)
-              publicKey: "047e634d4..." 
-            });
-          }, 500);
-        });
-      }
-      const errorData = await res.json().catch(() => ({ message: 'Failed to fetch user profile' }));
-      throw new Error(errorData.message || `HTTP ${res.status}: Failed to fetch user profile`);
+      if (res.status === 404) return null;
+      throw new Error(`HTTP ${res.status}: Failed to fetch user profile`);
     }
 
     const data = await res.json();
-    return data.data || data; // Support both { data: {...} } and direct response
+    return data.data || data;
   } catch (error) {
-    // Network error or backend not ready - use fallback for development
-    if (error instanceof TypeError || (error instanceof Error && error.message.includes('fetch'))) {
-      console.warn("Network error or backend not ready, using fallback mock data:", error);
-      return new Promise((resolve) => {
-        setTimeout(() => {
-          resolve({
-            username: username,
-            publicKey: "047e634d4..." 
-          });
-        }, 500);
-      });
-    }
     console.error("Failed to fetch user profile:", error);
-    // Return null instead of throwing to allow graceful handling
     return null;
   }
 };
@@ -70,13 +41,9 @@ export const getContactProfile = async (username: string): Promise<UserProfile |
 export const checkUserExists = async (username: string): Promise<boolean> => {
   try {
     const profile = await getContactProfile(username);
-    // If profile exists (even if from fallback), consider user as existing
-    // In production, you might want to distinguish between real and fallback
     return profile !== null;
   } catch (error) {
     console.error("Failed to check user existence:", error);
-    // For development: allow adding contact even if check fails
-    // In production, return false to be more strict
     return false;
   }
 };
@@ -86,18 +53,14 @@ export const checkUserExists = async (username: string): Promise<boolean> => {
  */
 export const getAllUsers = async (): Promise<string[]> => {
   try {
-    const token = getAuthToken();
-
     const res = await fetch(`${API_URL}`, {
-      method: 'GET',
+      method: "GET",
       headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        "Content-Type": "application/json",
       },
     });
 
     if (!res.ok) {
-      // If endpoint doesn't exist, return empty array
       if (res.status === 404) {
         return [];
       }
@@ -106,7 +69,13 @@ export const getAllUsers = async (): Promise<string[]> => {
 
     const data = await res.json();
     const users = data.data || data.users || data || [];
-    return Array.isArray(users) ? users.map((u: any) => u.username || u) : [];
+    return Array.isArray(users)
+      ? users
+          .map((u: { username?: string } | string) =>
+            typeof u === "string" ? u : u.username || ""
+          )
+          .filter(Boolean)
+      : [];
   } catch (error) {
     console.warn("Failed to fetch users list:", error);
     return [];
